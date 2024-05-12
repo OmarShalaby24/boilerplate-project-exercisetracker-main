@@ -19,7 +19,7 @@ const exerciseSchema = new Schema({
   user_id: {type: String, required: true},
   description: String,
   duration: Number,
-  date: String,
+  date: Date,
 });
 
 const Exercise = mongoose.model('Exercise', exerciseSchema);
@@ -47,8 +47,9 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
   const {_id} = req.params;
   const {description, duration, date} = req.body;
   var d = new Date(date);
+  if(d.toDateString() === "Invalid Date") d = new Date();
   try{
-    const exerciseObj = new Exercise({user_id: _id, description, duration, date: d.toDateString()});
+    const exerciseObj = new Exercise({user_id: _id, description, duration, date: d});
     exerciseObj.save();
     const user = await User.findById({_id});
     res.json({
@@ -68,14 +69,12 @@ app.get('/api/users', async (req, res) => {
   res.json(users);
 })
 
-app.get('/api/users/:id/logs', async (req, res) => {
-  const {id} = req.params;
+app.get('/api/users/:_id/logs', async (req, res) => {
   const {from, to, limit} = req.query;
-  var user, exercises;
-  try{
-    user = await User.findById(id);
-  }catch(err){
-    console.log(err);
+  const id = req.params._id;
+  const user = await User.findById(id);
+  if(!user){
+    return res.send("Couldn't find the user");
   }
   let dateObj = {};
   if(from){
@@ -85,20 +84,18 @@ app.get('/api/users/:id/logs', async (req, res) => {
     dateObj["$lte"] = new Date(to);
   }
   let filter = {
-    user_id: id,
+    user_id: id
   }
   if(from || to){
-    filter.date = dateObj
+    filter.date = dateObj;
   }
-  try{
-    exercises = await Exercise.find(filter).select("description duration date").limit(+limit ?? 500);
-  }catch(err){
-    console.log(err);
-  }
-  const log = exercises.map((e) => ({
+
+  const exercises = await Exercise.find(filter).limit(+limit ?? 500)
+
+  const log = exercises.map(e => ({
     description: e.description,
     duration: e.duration,
-    date: e.date
+    date: e.date.toDateString()
   }));
   const result = {
     _id: id,
@@ -106,7 +103,9 @@ app.get('/api/users/:id/logs', async (req, res) => {
     count: exercises.length,
     log: log
   }
-  res.json(result);
+  return res.send(result);
+  
+
 });
 
 
